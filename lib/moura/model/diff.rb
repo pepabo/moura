@@ -7,7 +7,7 @@ require_relative "remote"
 module Moura
   module Model
     class Diff
-      DiffClass = Struct.new(:add, :remove, :add_user, :remove_user) do
+      DiffData = Struct.new(:add, :remove, :add_role_users, :remove_role_users) do
         def initialize
           super([], [], {}, {})
         end
@@ -21,9 +21,9 @@ module Moura
             if role =~ /\[\d+\]/
               case mark
               when "+"
-                result.add_user[normalize_name] = diff
+                result.add_role_users[normalize_name] = diff
               when "-"
-                result.remove_user[normalize_name] = diff
+                result.remove_role_users[normalize_name] = diff
               end
             else
               case mark
@@ -31,7 +31,7 @@ module Moura
                 result.add << normalize_name
 
                 # diffが空じゃない場合ユーザも追加
-                result.add_user[normalize_name] = diff unless diff.empty?
+                result.add_role_users[normalize_name] = diff unless diff.empty?
               when "-"
                 result.remove << normalize_name
               end
@@ -44,8 +44,8 @@ module Moura
           result.merge!(remove.to_h { |r| [r, { action: :remove, users: {} }] })
 
           [
-            %i[add_user add],
-            %i[remove_user remove]
+            %i[add_role_users add],
+            %i[remove_role_users remove]
           ].each do |method, action|
             send(method).each do |role, users|
               result[role] ||= { users: {} }
@@ -61,10 +61,31 @@ module Moura
 
       def initialize(local_file)
         @local = Local.new(local_file)
-        @remote = Remote.new
-        roles_diff = Hashdiff.diff(@remote.roles, @local.roles)
+        roles_diff = Hashdiff.diff(Remote.role_users, @local.roles)
 
-        @diff = DiffClass.parse(roles_diff)
+        @diff = DiffData.parse(roles_diff)
+      end
+
+      def apply
+        @diff.add.each do |role|
+          Remote.create_role(role, @diff.add_role_users[role])
+        end
+
+        @diff.add_role_users
+             .except(*@diff.add) # すでにロールを追加していたら不要
+             .each do |role, users|
+          Remote.add_role_users(role, users)
+        end
+
+        @diff.remove.each do |role|
+          Remote.delete_role(role)
+        end
+
+        @diff.remove_role_users
+             .except(*@diff.remove) # すでにロールを削除していたら不要
+             .each do |role, users|
+          Remote.remove_role_users(role, users)
+        end
       end
     end
   end

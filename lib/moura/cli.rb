@@ -18,5 +18,13 @@ module Moura
 
       View::Diff.new(model.diff).show
     end
+
+    desc "apply <file>", "diff"
+    def apply(file)
+      model = Model::Diff.new(file)
+      model.apply
+
+      View::Diff.new(model.diff).show
+    end
   end
 end

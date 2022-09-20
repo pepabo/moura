@@ -5,6 +5,7 @@ require_relative "moura/version"
 
 module Moura
   class Error < StandardError; end
+  class RoleNotFound < Error; end
 
   def self.start(_argv = ARGV)
     Cli.start(ARGV)
