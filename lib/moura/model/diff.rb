@@ -67,6 +67,7 @@ module Moura
         roles_diff = Hashdiff.diff(Remote.role_users, @local.roles)
 
         @diff = DiffData.parse(roles_diff)
+        Remote.validate_users(@diff.add_role_users.values.flatten)
       end
 
       def apply

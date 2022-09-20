@@ -28,7 +28,7 @@ module Moura
       def self.find_user_id_by_email(email)
         @users.values.find do |user|
           user.email == email
-        end.id
+        end&.id
       end
 
       def self.users
@@ -94,6 +94,12 @@ module Moura
         user_ids = users&.map { |user| find_user_id_by_email(user) }
 
         client.remove_role_users(role_id, user_ids) if user_ids
+      end
+
+      def self.validate_users(users)
+        users.each do |user|
+          raise UserNotFound, user unless find_user_id_by_email(user)
+        end
       end
     end
   end

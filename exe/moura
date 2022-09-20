@@ -3,4 +3,8 @@
 require "rubygems"
 require "moura"
 
-Moura.start
+begin
+  Moura.start
+rescue Moura::Error => e
+  warn e.message
+end
