@@ -7,4 +7,5 @@ begin
   Moura.start
 rescue Moura::Error => e
   warn e.message
+  exit 1
 end
