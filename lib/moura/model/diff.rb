@@ -34,6 +34,9 @@ module Moura
                 result.add_role_users[normalize_name] = diff unless diff.empty?
               when "-"
                 result.remove << normalize_name
+
+                # diffが空じゃない場合ユーザも追加
+                result.remove_role_users[normalize_name] = diff unless diff.empty?
               end
             end
           end
