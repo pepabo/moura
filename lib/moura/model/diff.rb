@@ -9,7 +9,7 @@ module Moura
     class Diff
       DiffData = Struct.new(:add, :remove, :add_role_users, :remove_role_users) do
         def initialize
-          super([], [], {}, {})
+          super([], [], Hash.new([]), Hash.new([]))
         end
 
         def self.parse(diff_data)
@@ -21,9 +21,9 @@ module Moura
             if role =~ /\[\d+\]/
               case mark
               when "+"
-                result.add_role_users[normalize_name] = diff
+                result.add_role_users[normalize_name] += diff
               when "-"
-                result.remove_role_users[normalize_name] = diff
+                result.remove_role_users[normalize_name] += diff
               end
             else
               case mark
