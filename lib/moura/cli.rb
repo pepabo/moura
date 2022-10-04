@@ -8,8 +8,8 @@ module Moura
   class Cli < Thor
     desc "dump", "dump"
     def dump
-      remote = Remote.new
-      remote.dump
+      role_users = Model::Remote.role_users
+      puts YAML.dump(role_users.sort_by(&:first).to_h)
     end
 
     desc "diff <file>", "diff"

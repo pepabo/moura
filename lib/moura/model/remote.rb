@@ -21,10 +21,6 @@ module Moura
         OneLogin::Api.new(client_id, client_secret)
       end
 
-      def self.dump
-        puts YAML.dump(roles.sort_by(&:first).to_h)
-      end
-
       def self.find_user_id_by_email(email)
         @users.values.find do |user|
           user.email == email
