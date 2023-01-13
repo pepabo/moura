@@ -12,7 +12,7 @@ module Moura
 
       def self.client!
         OneLogin.configure do |config|
-          config.host = "pepabo.onelogin.com"
+          config.host = ENV.fetch("ONELOGIN_API_DOMAIN")
           config.debugging = ENV.fetch("MOURA_DEBUG", false)
         end
 
