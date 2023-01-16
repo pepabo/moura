@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "../onelogin"
 require "onelogin/api"
 require "yaml"
 
@@ -7,24 +8,7 @@ module Moura
   module Model
     class Remote
       def self.client
-        @client ||= client!
-      end
-
-      def self.client!
-        OneLogin.configure do |config|
-          config.host = ENV.fetch("ONELOGIN_API_DOMAIN")
-          config.debugging = ENV.fetch("MOURA_DEBUG", false)
-        end
-
-        client_id = ENV.fetch("ONELOGIN_CLIENT_ID")
-        client_secret = ENV.fetch("ONELOGIN_CLIENT_SECRET")
-        OneLogin::Api.new(client_id, client_secret)
-      end
-
-      def self.find_user_id_by_email(email)
-        @users.values.find do |user|
-          user.email == email
-        end&.id
+        @client ||= OneLogin.client
       end
 
       def self.users
