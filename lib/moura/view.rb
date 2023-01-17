@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative 'view/diff'
+require_relative "view/diff"
 
 module Moura
   module View
