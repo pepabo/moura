@@ -7,89 +7,78 @@ require_relative "remote"
 module Moura
   module Model
     class Diff
-      DiffData = Struct.new(:add, :remove, :add_role_users, :remove_role_users) do
-        def initialize
-          super([], [], Hash.new([]), Hash.new([]))
-        end
-
-        def self.parse(diff_data)
-          diff_data.each_with_object(new) do |(mark, role, diff), result|
-            normalize_name = role.sub(/\[\d+\]$/, "")
-            diff = [diff].flatten
-
-            # [\d+]で終わっていたらユーザの変更のみ
-            if role =~ /\[\d+\]/
-              case mark
-              when "+"
-                result.add_role_users[normalize_name] += diff
-              when "-"
-                result.remove_role_users[normalize_name] += diff
-              end
-            else
-              case mark
-              when "+"
-                result.add << normalize_name
-
-                # diffが空じゃない場合ユーザも追加
-                result.add_role_users[normalize_name] = diff unless diff.empty?
-              when "-"
-                result.remove << normalize_name
-
-                # diffが空じゃない場合ユーザも追加
-                result.remove_role_users[normalize_name] = diff unless diff.empty?
-              end
-            end
-          end
-        end
-
-        def to_h
-          result = add.to_h { |a| [a, { action: :add, users: {} }] }
-          result.merge!(remove.to_h { |r| [r, { action: :remove, users: {} }] })
-
-          [
-            %i[add_role_users add],
-            %i[remove_role_users remove]
-          ].each do |method, action|
-            send(method).each do |role, users|
-              result[role] ||= { users: {} }
-              result[role][:users][action] = users
-            end
-          end
-
-          result.sort_by(&:first).to_h
-        end
-      end
-
       attr_reader :diff
 
       def initialize(local_file)
         @local = Local.new(local_file)
-        roles_diff = Hashdiff.diff(Remote.role_users, @local.roles)
+        @remote = Remote.new
 
-        @diff = DiffData.parse(roles_diff)
-        Remote.validate_users(@diff.add_role_users.values.flatten)
+        hash_diff = Hashdiff.diff(@remote.dump, @local.dump)
+        @diff = parse_hash_diff(hash_diff)
+
+        validate_diff_data
+      end
+
+      def parse_hash_diff(data)
+        data.each_with_object({}) do |(mark, target, diff), result|
+          (role_name, child) = target.match(/^(.+?)(?:\.(apps|users)(?:\[\d+\])?)?$/).captures
+          action = mark == "+" ? :add : :remove
+
+          unless result[role_name]
+            result[role_name] = {
+              action: :none,
+              apps: { add: [], remove: [] },
+              users: { add: [], remove: [] }
+            }
+          end
+
+          if child
+            result[role_name][child.to_sym][action] <<= diff
+          else
+            result[role_name][:action] = action
+            result[role_name][:apps][action] += diff.fetch("apps", [])
+            result[role_name][:users][action] += diff.fetch("users", [])
+          end
+        end
+      end
+
+      def validate_diff_data
+        apps = @diff.map { |_, v| v[:apps][:add] }.flatten.sort.uniq
+        @remote.validate_apps(apps)
+
+        emails = @diff.map { |_, v| v[:users][:add] }.flatten.sort.uniq
+        @remote.validate_emails(emails)
       end
 
       def apply
-        @diff.add.each do |role|
-          Remote.create_role(role, @diff.add_role_users[role])
-        end
+        @diff.each do |role, attr|
+          case attr[:action]
+          when :add
+            @remote.create_role(role)
+          when :remove
+            @remote.delete_role(role)
+            next
+          end
 
-        @diff.add_role_users
-             .except(*@diff.add) # すでにロールを追加していたら不要
-             .each do |role, users|
-          Remote.add_role_users(role, users)
-        end
+          apps = attr[:apps]
+          add_apps = apps[:add]
+          remove_apps = apps[:remove]
+          if add_apps.present? || remove_apps.present?
+            merged_app_ids = merge_role_apps(role, apps[:add], apps[:remove])
+            @remote.set_role_apps(role, merged_app_ids)
+          end
 
-        @diff.remove.each do |role|
-          Remote.delete_role(role)
+          users = attr[:users]
+          @remote.add_role_users(role, users[:add])
+          @remote.remove_role_users(role, users[:remove])
         end
+      end
 
-        @diff.remove_role_users
-             .except(*@diff.remove) # すでにロールを削除していたら不要
-             .each do |role, users|
-          Remote.remove_role_users(role, users)
-        end
+      def merge_role_apps(role, add, remove)
+        current_apps = @remote.role(role).apps
+        add_apps = add.map { |name| @remote.find_app_id_by_name(name) }
+        remove_apps = remove.map { |name| @remote.find_app_id_by_name(name) }
+        current_apps + add_apps - remove_apps
       end
     end
   end

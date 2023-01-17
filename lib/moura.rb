@@ -3,6 +3,12 @@
 require_relative "moura/cli"
 require_relative "moura/version"
 
+class Array
+  def present?
+    !empty?
+  end
+end
+
 module Moura
   class Error < StandardError; end
 
@@ -15,6 +21,12 @@ module Moura
   class UserNotFound < Error
     def initialize(user)
       super("user '#{user}' does not exist")
+    end
+  end
+
+  class ApplicationNotFound < Error
+    def initialize(app)
+      super("application '#{app}' does not exist")
     end
   end
 

@@ -1,101 +1,110 @@
 # frozen_string_literal: true
 
+require_relative "../onelogin"
 require "onelogin/api"
 require "yaml"
 
 module Moura
   module Model
     class Remote
-      def self.client
-        @client ||= client!
-      end
+      def initialize
+        @client = OneLogin.client
 
-      def self.client!
-        OneLogin.configure do |config|
-          config.host = ENV.fetch("ONELOGIN_API_DOMAIN")
-          config.debugging = ENV.fetch("MOURA_DEBUG", false)
-        end
-
-        client_id = ENV.fetch("ONELOGIN_CLIENT_ID")
-        client_secret = ENV.fetch("ONELOGIN_CLIENT_SECRET")
-        OneLogin::Api.new(client_id, client_secret)
-      end
-
-      def self.find_user_id_by_email(email)
-        @users.values.find do |user|
-          user.email == email
-        end&.id
-      end
-
-      def self.users
-        @users ||= users!
-      end
-
-      def self.users!
         # データを圧縮するために取得フィールドを絞る
-        client.list_users(fields: "id,email,firstname,lastname", limit: 1000).to_h do |user|
+        @users = @client.list_users(fields: "id,email,firstname,lastname", limit: 1000).to_h do |user|
           [user.id, user]
         end
+        @apps = @client.list_apps(limit: 1000).to_h { |app| [app.id, app] }
+        update_roles
       end
 
-      def self.find_role_id(name)
-        role = roles[name]
+      def role(name)
+        @roles[name]
+      end
+
+      def app(id)
+        @apps[id]
+      end
+
+      def find_role_id(name)
+        role = @roles[name]
         raise RoleNotFound unless role
 
         role.id
       end
 
-      def self.roles
-        @roles ||= roles!
+      def dump
+        @roles.map do |(name, role)|
+          apps = role.apps.map { |id| @apps[id].name }.sort
+          users = role.users.map { |id| @users[id].email }.sort
+          [name, { "apps" => apps, "users" => users }]
+        end.sort_by(&:first).to_h
       end
 
-      def self.roles!
-        client.list_roles(limit: 1000).sort_by(&:id).to_h do |role|
-          [role.name, role]
+      def validate_apps(apps)
+        apps.each do |app|
+          raise ApplicationNotFound, app unless find_app_id_by_name(app)
         end
       end
 
-      def self.role_users
-        roles.to_h do |_name, role|
-          emails = role.users.map do |id|
-            users[id].email
-          end
-          [role.name, emails.sort]
+      def validate_emails(emails)
+        emails.each do |email|
+          raise UserNotFound, email unless find_user_id_by_email(email)
         end
       end
 
-      def self.create_role(role, users = nil)
-        body = { name: role }
-
-        user_ids = users&.map { |user| find_user_id_by_email(user) }
-        body[:users] = user_ids if user_ids
-
-        client.create_roles(debug_body: body)
+      def create_role(name)
+        body = { name: }
+        @client.create_roles(debug_body: body)
+        update_roles
       end
 
-      def self.add_role_users(role, users)
-        role_id = find_role_id(role)
-        user_ids = users&.map { |user| find_user_id_by_email(user) }
-
-        client.add_role_users(role_id, user_ids) if user_ids
+      def set_role_apps(name, app_ids)
+        role_id = find_role_id_by_name(name)
+        @client.set_role_apps(role_id, app_ids)
       end
 
-      def self.delete_role(role)
-        role_id = find_role_id(role)
-        client.delete_role(role_id)
+      def add_role_users(name, emails)
+        role_id = find_role_id_by_name(name)
+        user_ids = emails&.map { |email| find_user_id_by_email(email) }
+
+        @client.add_role_users(role_id, user_ids) if user_ids&.present?
       end
 
-      def self.remove_role_users(role, users)
-        role_id = find_role_id(role)
-        user_ids = users&.map { |user| find_user_id_by_email(user) }
-
-        client.remove_role_users(role_id, user_ids) if user_ids
+      def delete_role(name)
+        role_id = find_role_id_by_name(name)
+        @client.delete_role(role_id) if role_id
       end
 
-      def self.validate_users(users)
-        users.each do |user|
-          raise UserNotFound, user unless find_user_id_by_email(user)
-        end
+      def remove_role_users(name, emails)
+        role_id = find_role_id_by_name(name)
+        user_ids = emails&.map { |email| find_user_id_by_email(email) }
+
+        @client.remove_role_users(role_id, user_ids) if user_ids&.present?
+      end
+
+      def find_role_id_by_name(name)
+        return unless (role = @roles.find { |_, r| r.name == name })
+
+        role.last.id
+      end
+
+      def find_app_id_by_name(name)
+        return unless (app = @apps.find { |_, a| a.name == name })
+
+        app.last.id
+      end
+
+      def find_user_id_by_email(email)
+        return unless (user = @users.find { |_, v| v.email == email })
+
+        user.last.id
+      end
+
+      private
+
+      def update_roles
+        @roles = @client.list_roles(limit: 1000).to_h { |role| [role.name, role] }
       end
     end
   end
