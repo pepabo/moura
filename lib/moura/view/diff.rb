@@ -10,24 +10,33 @@ module Moura
       end
 
       def show
-        data.to_h.each do |role, attr|
-          role_action = case attr[:action]
-                        when :add then "+"
-                        when :remove then "-"
-                        else " "
-                        end
-          puts "#{role_action} #{role}:"
+        @data.each do |role, attr|
+          mark = symbol_to_mark(attr[:action])
+          puts "#{mark} #{role}"
+          show_child(attr[:apps], "アプリケーション")
+          show_child(attr[:users], "ユーザ")
+        end
+      end
 
-          [
-            [:add, "+"],
-            [:remove, "-"]
-          ].each do |action, mark|
-            attr[:users][action]&.each do |user|
-              puts "#{mark}   * #{user}"
-            end
-          end
+      def symbol_to_mark(sym)
+        case sym
+        when :add then "+"
+        when :remove then "-"
+        else " "
+        end
+      end
 
-          puts
+      def show_child(data, name)
+        return if data[:add].empty? && data[:remove].empty?
+
+        puts "    => #{name}"
+
+        data[:add].sort.each do |a|
+          puts "+      #{a}"
+        end
+
+        data[:remove].sort.each do |r|
+          puts "-      #{r}"
         end
       end
     end
