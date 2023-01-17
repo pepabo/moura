@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    moura (0.1.0)
+    moura (0.2.0)
       hashdiff (~> 1.0.1)
       onelogin (~> 3.0.0.pre.alpha.1)
       thor (~> 1.2, >= 1.2.1)
